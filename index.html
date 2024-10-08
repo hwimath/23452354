@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>휘매쓰 연산 챌린지!</title>
+    <style>
+        body {
+            font-family: 'Nanum Gothic', sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+        }
+        #start-screen, #game-container {
+            margin-top: 50px;
+        }
+        h1 {
+            font-size: 48px;
+            color: #ff6b6b;
+        }
+        button {
+            font-size: 20px;
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #ffcc5c;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #ffb347;
+        }
+        #total-time, #score, #chances {
+            font-size: 24px;
+            margin: 10px;
+        }
+        #problem {
+            font-size: 36px;
+            margin: 20px;
+            color: #4a4e4d;
+        }
+        #energy-bar-container {
+            width: 80%;
+            background-color: #ccc;
+            height: 30px;
+            margin: 20px auto;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        #energy-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #76c7c0;
+        }
+        #options {
+            margin: 20px;
+        }
+        .option-button {
+            font-size: 24px;
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #6eb5ff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .option-button:hover {
+            background-color: #69a1f4;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>휘매쓰 연산 챌린지!</h1>
+        <p style="font-size:24px;">난이도를 선택하세요:</p>
+        <button onclick="startGame('최상')">최상</button>
+        <button onclick="startGame('상')">상</button>
+        <button onclick="startGame('중')">중</button>
+        <button onclick="startGame('하')">하</button>
+    </div>
+
+    <script>
+        // 분수 생성 함수
+        function generateFraction(numerator, denominator) {
+            return '<span style="display:inline-block; text-align:center;">' +
+                '<span style="border-bottom:1px solid #000; display:block;">' + numerator + '</span>' +
+                '<span style="display:block;">' + denominator + '</span>' +
+                '</span>';
+        }
+
+        // 분수 간의 등가성 확인 함수
+        function areFractionsEquivalent(n1, d1, n2, d2) {
+            return n1 * d2 === n2 * d1;
+        }
+
+        let fractions = [];
+        let baseFractions = [
+            {n: 1, d: 2}, {n: 1, d: 3}, {n: 1, d: 4}, {n: 2, d: 3},
+            {n: 3, d: 4}, {n: 2, d: 5}, {n: 3, d: 5}, {n: 4, d: 5}
+        ];
+
+        // 문제 생성
+        while (fractions.length < 50) {
+            let baseIndex = Math.floor(Math.random() * baseFractions.length);
+            let baseFraction = baseFractions[baseIndex];
+
+            let multiplier = Math.floor(Math.random() * 5) + 2; // 2~6배
+            let equivalentFraction = {n: baseFraction.n * multiplier, d: baseFraction.d * multiplier};
+
+            let options = [equivalentFraction];
+            while (options.length < 4) {
+                let n = Math.floor(Math.random() * 9) + 1;
+                let d = Math.floor(Math.random() * 9) + 1;
+                if (n < d && !areFractionsEquivalent(baseFraction.n, baseFraction.d, n, d)) {
+                    options.push({n: n, d: d});
+                }
+            }
+
+            // 옵션 섞기
+            options.sort(() => Math.random() - 0.5);
+
+            fractions.push({
+                base: baseFraction,
+                options: options
+            });
+        }
+
+        let currentProblemIndex = 0;
+        let score = 0;
+        let chancesLeft = 3;
+        let totalTimeElapsed = 0;
+        let timeLimit = 0;
+        let pointsPerQuestion = 0;
+        let timeLimitDecreaseRate = 0.01;
+        let gameInterval;
+        let problemTimer;
+        let selectedDifficulty = '';
+        let currentProblem;
+
+        function startGame(difficulty) {
+            selectedDifficulty = difficulty;
+            if (difficulty === '최상') {
+                timeLimit = 20;
+                pointsPerQuestion = 20;
+            } else if (difficulty === '상') {
+                timeLimit = 30;
+                pointsPerQuestion = 15;
+            } else if (difficulty === '중') {
+                timeLimit = 40;
+                pointsPerQuestion = 13;
+            } else if (difficulty === '하') {
+                timeLimit = Infinity;
+                pointsPerQuestion = 10;
+            }
+
+            document.getElementById('start-screen').style.display = 'none';
+            showGameInterface();
+
+            gameInterval = setInterval(function() {
+                totalTimeElapsed++;
+                document.getElementById('total-time').innerText = '전체 게임 시간: ' + formatTime(totalTimeElapsed);
+            }, 1000);
+
+            showNextProblem();
+        }
+
+        function showGameInterface() {
+            let gameContainer = document.createElement('div');
+            gameContainer.id = 'game-container';
+
+            let totalTimeDiv = document.createElement('div');
+            totalTimeDiv.id = 'total-time';
+            totalTimeDiv.innerText = '전체 게임 시간: 00:00';
+
+            let scoreDiv = document.createElement('div');
+            scoreDiv.id = 'score';
+            scoreDiv.innerText = '점수: 0';
+
+            let chancesDiv = document.createElement('div');
+            chancesDiv.id = 'chances';
+            chancesDiv.innerText = '남은 기회: 3';
+
+            let problemDiv = document.createElement('div');
+            problemDiv.id = 'problem';
+
+            let energyBarContainer = document.createElement('div');
+            energyBarContainer.id = 'energy-bar-container';
+
+            let energyBar = document.createElement('div');
+            energyBar.id = 'energy-bar';
+            energyBarContainer.appendChild(energyBar);
+
+            let optionsDiv = document.createElement('div');
+            optionsDiv.id = 'options';
+
+            gameContainer.appendChild(totalTimeDiv);
+            gameContainer.appendChild(scoreDiv);
+            gameContainer.appendChild(chancesDiv);
+            gameContainer.appendChild(problemDiv);
+            gameContainer.appendChild(energyBarContainer);
+            gameContainer.appendChild(optionsDiv);
+
+            document.body.appendChild(gameContainer);
+        }
+
+        function showNextProblem() {
+            if (currentProblemIndex >= fractions.length) {
+                let randomIndex = Math.floor(Math.random() * fractions.length);
+                currentProblem = fractions[randomIndex];
+            } else {
+                currentProblem = fractions[currentProblemIndex];
+            }
+
+            let problemText = generateFraction(currentProblem.base.n, currentProblem.base.d) + ' 과(와) 크기가 같은 분수를 찾으시오.';
+            document.getElementById('problem').innerHTML = problemText;
+
+            let optionsDiv = document.getElementById('options');
+            optionsDiv.innerHTML = '';
+
+            currentProblem.options.forEach((option, index) => {
+                let optionButton = document.createElement('button');
+                optionButton.className = 'option-button';
+                optionButton.innerHTML = generateFraction(option.n, option.d);
+                optionButton.onclick = function() {
+                    checkAnswer(option);
+                };
+                optionsDiv.appendChild(optionButton);
+            });
+
+            if (selectedDifficulty !== '하') {
+                startEnergyBar();
+            }
+        }
+
+        function startEnergyBar() {
+            let energyBar = document.getElementById('energy-bar');
+            let maxTime = timeLimit;
+            let timeLeft = timeLimit;
+            energyBar.style.width = '100%';
+
+            clearInterval(problemTimer);
+
+            problemTimer = setInterval(function() {
+                timeLeft -= 0.1;
+                let percentage = (timeLeft / maxTime) * 100;
+                energyBar.style.width = percentage + '%';
+
+                if (timeLeft <= 0) {
+                    clearInterval(problemTimer);
+                    chancesLeft--;
+                    updateChancesDisplay();
+
+                    if (chancesLeft <= 0) {
+                        endGame();
+                    } else {
+                        alert('시간 초과! 정답을 선택하지 못했습니다.');
+                        timeLimit *= (1 - timeLimitDecreaseRate);
+                        currentProblemIndex++;
+                        showNextProblem();
+                    }
+                }
+            }, 100);
+        }
+
+        function updateChancesDisplay() {
+            document.getElementById('chances').innerText = '남은 기회: ' + chancesLeft;
+        }
+
+        function checkAnswer(selectedOption) {
+            clearInterval(problemTimer);
+
+            if (areFractionsEquivalent(currentProblem.base.n, currentProblem.base.d, selectedOption.n, selectedOption.d)) {
+                score += pointsPerQuestion;
+                document.getElementById('score').innerText = '점수: ' + score;
+
+                if (selectedDifficulty !== '하') {
+                    timeLimit *= (1 - timeLimitDecreaseRate);
+                }
+
+                currentProblemIndex++;
+                showNextProblem();
+            } else {
+                chancesLeft--;
+                updateChancesDisplay();
+                alert('틀렸습니다!');
+
+                if (chancesLeft <= 0) {
+                    endGame();
+                } else {
+                    if (selectedDifficulty !== '하') {
+                        timeLimit *= (1 - timeLimitDecreaseRate);
+                    }
+
+                    currentProblemIndex++;
+                    showNextProblem();
+                }
+            }
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            clearInterval(problemTimer);
+            alert('게임 종료! 최종 점수: ' + score + '점');
+            location.reload();
+        }
+
+        function formatTime(seconds) {
+            let minutes = Math.floor(seconds / 60);
+            let secs = Math.floor(seconds % 60);
+            return (minutes < 10 ? '0' + minutes : minutes) + ':' + (secs < 10 ? '0' + secs : secs);
+        }
+    </script>
+</body>
+</html>
